@@ -1,0 +1,8 @@
+.svn/
+publish/
+build/buildinfo.properties
+.DS_Store
+.couchapprc
+js/default.js
+js/production.js
+cache.manifest
