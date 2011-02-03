@@ -36,7 +36,6 @@
 
   <!-- All JavaScript at the bottom, except for Modernizr which enables HTML5 elements & feature detects -->
   <script src="js/libs/modernizr-1.6.min.js"></script>
-  <%= csrf_meta_tag %>
 
 </head>
 <body>
@@ -87,6 +86,7 @@
   </script>
   <script src="js/plugins.js"></script>
   <script src="js/sammy.js"></script>
+  <script src="js/lib/"></script>
   <!-- <script src="js/app.js"></script>  -->
   <script src="js/script.js"></script>
   <!-- end concatenated and minified scripts-->
@@ -97,9 +97,9 @@
     <script> DD_belatedPNG.fix('img, .png_bg'); //fix any <img> or .png_bg background-images </script>
   <![endif]-->
 
-  <!-- yui profiler and profileviewer - remove for production -->
+  <!-- yui profiler and profileviewer - remove for production 
   <script src="js/profiling/yahoo-profiling.min.js"></script>
-  <script src="js/profiling/config.js"></script>
+  <script src="js/profiling/config.js"></script> -->
   <!-- end profiling code -->
 
 
@@ -109,14 +109,6 @@
    // some of this code was borrowed from https://github.com/facebook/connect-js/raw/master/examples/jquery/login.html
 //*TODO: Move this session managenent code into its own js file in the plugins folder.
  
-      $('#login').bind('click', function() {
-        FB.login(handleSessionResponse);
-      });
-
-      $('#logout').bind('click', function() {
-        FB.logout(handleSessionResponse);
-      });
-
       // handle a session response from any of the auth related calls
       function handleSessionResponse(response) {
         // if we dont have a session, just hide the user info
@@ -145,6 +137,15 @@
           }
         );
       }
+
+      $('#login').bind('click', function() {
+        FB.login(handleSessionResponse);
+      });
+
+      $('#logout').bind('click', function() {
+        FB.logout(handleSessionResponse);
+      });
+
 
    //var _gaq = [['_setAccount', 'UA-XXXXX-X'], ['_trackPageview']];
    //(function(d, t) {
