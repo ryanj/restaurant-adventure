@@ -11,7 +11,7 @@
        Remove this if you use the .htaccess -->
   <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
 
-  <title>Foodz</title>
+  <title>RESTauRANT ADVENTURE</title>
 
   <meta name="description" content="yelp mashup test">
   <meta name="author" content="ryan jarvinen">
@@ -25,6 +25,7 @@
 
   <!-- CSS : implied media="all" -->
   <link rel="stylesheet" href="css/style.css?v=2">
+  <link rel="stylesheet" href="css/ui-darkness/jquery-ui-1.8.9.custom.css">
   <style type="text/css">
     html { height: 100% }
     body, #container { height: 100%; margin: 0px; padding: 0px }
@@ -39,22 +40,29 @@
 
 </head>
 <body style='width:100%;height:100%'>
-  <div id="container" style='width:100%;height:100%'>
+  <div id="container" style='width:100%;height:100%; position:fixed;'>
+
     <header>
       <div style='position:absolute;top:2.5em;right:0px;z-index:100;width:76px;background-color:#FFFFFF;' id='fb-root'>
         <div id="user-info" style="width:76px;display: none;"></div>
         <div>
           <button style='display:none;' id="login">Login</button>
           <button style='display:none;' id="logout">Logout</button>
-          <button style='display:none;' id="disconnect">Disconnect</button>
         </div>
       </div> 
     </header>
-    <div id="map_canvas" style="width:100%; height:100%">Javascript must be enabled in order to run this app.</div>
-    <script type='text/javascript'>document.getElementById('map_canvas').innerHTML = 'Loading...';</script>
-    <div id='yelp_data'></div>
-    <div id='main' style='display:none;z-index:150;'></div>
-    <footer><div style='position:absolute;margin-left:5.5em;bottom:0px;'><a href='//yelp.com'><img src='http://media3.ct.yelpcdn.com/static/201012163498344258/i/developers/Powered_By_Yelp_Black.png'/></a></div></footer>
+
+      <!--  Overlay / Menu 
+      <div id='main' style='background-color:#FFF;'><h1>Loading...</h1><div id='menu_body'>Javascript must be enabled in order to run this app</div> </div>
+      <script type='text/javascript'>document.getElementById('menu_body').innerHTML = 'Loading';</script>
+-->
+    <div id="map_canvas" style="width:100%; height:100;%">
+    </div>
+
+    <footer>
+      <div style='position:absolute;margin-left:5.5em;bottom:0px;'> <a href='//yelp.com'> <img src='http://media3.ct.yelpcdn.com/static/201012163498344258/i/developers/Powered_By_Yelp_Black.png'/> </a> </div>
+    </footer>
+
   </div> <!--! end of #container -->
 
   <!-- Javascript at the bottom for fast page loading -->
@@ -62,7 +70,6 @@
   <!-- Grab Google CDN's jQuery. fall back to local if necessary -->
   <script src="//ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.js"></script>
   <script>!window.jQuery && document.write(unescape('%3Cscript src="js/libs/jquery-1.4.2.js"%3E%3C/script%3E'))</script>
-
 
   <!-- scripts concatenated and minified via ant build script-->
   <script type="text/javascript"
@@ -72,21 +79,8 @@
   <script type="text/javascript" src="http://oauth.googlecode.com/svn/code/javascript/sha1.js"></script>
   <script type="text/javascript" src="https://github.com/jamespadolsey/prettyPrint.js/raw/master/prettyprint.js"></script>
   <script src="http://connect.facebook.net/en_US/all.js"></script>
-  <script>
-   // some of this code was borrowed from https://github.com/facebook/connect-js/raw/master/examples/jquery/login.html
-//*TODO: Move this session managenent code into its own js file in the plugins folder.
- 
-
-    //window.fbAsyncInit = function() {
-    //};
-    //(function() {
-    //  var e = document.createElement('script'); e.async = true;
-    //  e.src = document.location.protocol +
-    //    '//connect.facebook.net/en_US/all.js';
-    //  document.getElementById('fb-root').appendChild(e);
-    //}());
-  </script>
   <script src="js/libs/sammy.js"></script>
+  <script src="js/libs/jquery-ui-1.8.9.custom.min.js"></script>
   <script src="js/libs/jquery.couch-0.11.js"></script>
   <script src="js/libs/sammy.nested_params.js"></script>
   <script src="js/libs/sammy.template.js"></script>
@@ -94,7 +88,6 @@
   <script src="js/plugins.js"></script>  
   <script src="js/app.js"></script>
   <!-- end concatenated and minified scripts-->
-
 
   <!--[if lt IE 7 ]>
     <script src="js/libs/dd_belatedpng.js"></script>
@@ -106,59 +99,9 @@
   <script src="js/profiling/config.js"></script> -->
   <!-- end profiling code -->
 
-
   <!-- asynchronous google analytics: mathiasbynens.be/notes/async-analytics-snippet
        change the UA-XXXXX-X to be your site's ID -->
   <script>
-      FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true,
-             xfbml: true});
-      // handle a session response from any of the auth related calls
-      function handleSessionResponse(response) {
-        // if we dont have a session, just hide the user info
-
-        console.log(response.session);
-        if (!response.session) {
-          $('#user-info').hide('fast');
-          foodz.user = false;
-          $('#login').show('fast');
-          $('#logout').hide('fast');
-          return;
-        }
-        else
-        {
-          foodz.display_user();
-        }
-      };
-
-      FB.getLoginStatus(handleSessionResponse);
-      foodz.display_user = function(){
-        $('#login').show('fast');
-        FB.api(
-          {
-            method: 'fql.query',
-            query: 'SELECT name, pic FROM profile WHERE id=' + FB.getSession().uid
-          },
-          function(response) {
-            var user = response[0];
-            foodz.user = user;
-            foodz.fb_session = FB.getSession();
-            foodz.user_id = foodz.fb_session.uid;
-            $('#user-info').html('<img style="width:76px;" src="' + user.pic + '">' + user.name).show('fast');
-            $('#login').hide('fast');
-            $('#logout').show('fast');
-          }
-        // if we have a session, query for the user's profile picture and name
-        );
-      };
-      $('#login').bind('click', function() {
-        FB.login(handleSessionResponse);
-      });
-
-      $('#logout').bind('click', function() {
-        FB.logout(handleSessionResponse);
-      });
-      foodz.display_user();
-
    //var _gaq = [['_setAccount', 'UA-XXXXX-X'], ['_trackPageview']];
    //(function(d, t) {
    // var g = d.createElement(t),
@@ -168,6 +111,5 @@
    // s.parentNode.insertBefore(g, s);
    //})(document, 'script');
   </script>
-
 </body>
 </html>
