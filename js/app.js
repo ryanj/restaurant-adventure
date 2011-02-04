@@ -27,10 +27,10 @@ var foodz = {
     }
   }
 };
-foodz = foodz;
 foodz.yelp = {};
 foodz.yelp.businesses = {};
 foodz.yelp.markers = {};
+
 foodz.draw_map = function(){
   foodz.latlng = new google.maps.LatLng(foodz.search_location_lat, foodz.search_location_long);
   foodz.myMapOptions = {
@@ -40,9 +40,6 @@ foodz.draw_map = function(){
   };
   foodz.map = new google.maps.Map(document.getElementById("map_canvas"), foodz.myMapOptions);
 };
-
-//  DRAW THE MAP!! 
-foodz.draw_map();
 
 foodz.yelp_data_callback = function(data){ 
   console.log(data);
@@ -205,45 +202,12 @@ foodz.clear_markers = function( )
   this.yelp.markers = {};
 };
 
-foodz.user_detail_view = function(id){
-  //get user detail html by facebook_id
-  //user = foodz.get('user', id);
-  //html = '<div>user</div>';
-  //html.showzizzle();
 
-  //Logged-In only?  load login prompt?
-  alert('detail view of user ' + id);
-};
-foodz.restaurant_detail_view = function(id){
-  //get restaurant / favorite detail html by yelp_id
-  //print favorite_count
-  console.log('detail view of ' + foodz.yelp.businesses[id].name );
-};
-foodz.fav_user_list_view = function(id){
-  //get user list html by yelp_id
-  //Logged-In only?  load login prompt?
-  alert('list view of users per restaurant' + id);
-};
-foodz.user_fav_list_view = function(id){
-  //get restaurant list html by facebook_id
-  //Logged-In only?  load login prompt?
-  alert('list view of favorites per user ' + id);
-}
-foodz.mark_favorite = function(user_id, yelp_id)
-{
-  //
-  //this.favorites.users[user_id].append(yelp_id);
-  //this.users.favorites[yelp_id].append(user_id);
-};
-
-
-
-
-
-///SAMMY routes:
+///SAMMY app:
 ;(function($) {
   var app = $.sammy('#main', function() {
     this.debug = true;
+    this.foodz = foodz;
     var db = null;
     var db_loaded = false;
     //this.use(Sammy.Cache);
@@ -257,6 +221,7 @@ foodz.mark_favorite = function(user_id, yelp_id)
       if (!db_loaded) {
         //this.redirect('#/connecting');
         //return false;
+          //if (!js_loaded) {
       }
     });
 
@@ -264,6 +229,8 @@ foodz.mark_favorite = function(user_id, yelp_id)
     this.post('#/favorites/', function(context) {
       //must be logged in!
       // TODO: if not logged in redirect to login page
+  //this.favorites.users[user_id].append(yelp_id);
+  //this.users.favorites[yelp_id].append(user_id);
 
       //FB.ui popup publish offer on fave()/save()?
       context.log('mark a restaurant as a favorite');
@@ -318,7 +285,12 @@ foodz.mark_favorite = function(user_id, yelp_id)
     // read-only urls:
     this.get('#/restaurant/:id/', function(context) {
       //include favorite count if any
-      foodz.restaurant_detail_view(id);
+      //get restaurant / favorite detail html by yelp_id
+      //print favorite_count
+      id = params['id'];
+      console.log('detail view of ' + foodz.yelp.businesses[id].name );
+
+
       //this.task = db.collection('tasks').get(this.params['id']).json();
       //this.partial('/templates/task_details.html.erb')
 
@@ -327,7 +299,10 @@ foodz.mark_favorite = function(user_id, yelp_id)
     });
     this.get('#/favorite/:id/users/', function(context) {
       //ask the user to log in!!
-      context.log('all users who consider this restaurant a favorite');
+        //get user list html by yelp_id
+        //Logged-In only?  load login prompt?
+        alert('list view of users per restaurant' + id);
+        context.log('all users who consider this restaurant a favorite');
     });
     this.get('#/favorites/', function(context) {
       //  TODO: visually cycle through the 20 most recent favorites
@@ -339,13 +314,25 @@ foodz.mark_favorite = function(user_id, yelp_id)
       context.log('search');
     });
     this.get('#/settings/', function(context) {
+      // logout / disconnect
       //<button style='display:none;' id="disconnect">Disconnect</button>
+      //<button style='display:none;' id="logout">Logout</button>
       context.log('app settings');
     });
     this.get('#/user/:id/favorites/', function(context) {
       context.log('favorite list view, per user');
+      //get restaurant list html by facebook_id
+      //Logged-In only?  load login prompt?
+      alert('list view of favorites per user ' + id);
     });
     this.get('#/user/:id/', function(context) {
+      //get user detail html by facebook_id
+      //user = foodz.get('user', id);
+      //html = '<div>user</div>';
+      //html.showzizzle();
+
+      //Logged-In only?  load login prompt?
+      alert('detail view of user ' + id);
       //include favorite count if any
       //only available to logged in users?
 
@@ -372,6 +359,7 @@ foodz.mark_favorite = function(user_id, yelp_id)
   this.get('#/connecting', function() {
     //*TODO: welcome message, tos?
     //  $('#main').html('<span class="loading">... Loading ...</span>');
+
   });
 
 //    this.bind('task-toggle', function(e, data) {
@@ -407,75 +395,77 @@ foodz.mark_favorite = function(user_id, yelp_id)
 //      });
     });
 
-  this.bind('db-loaded', function() {
-    this.redirect('#/welcome/');
-  });
-
-  this.bind('error', function(e, data) {
-    $('#error').text(data.message).show();
-  });
-
-  //app.foodz = foodz;
+    this.bind('db-loaded', function() {
+      this.redirect('#/welcome/');
     });
 
+    this.bind('error', function(e, data) {
+      $('#error').text(data.message).show();
+    });
+  });
+
   $(function() {
+    foodz.draw_map();
     app.run('#/');
+
+    if( foodz.dev_mode === true ){ 
+      // development:
+      FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true, xfbml: true});
+    }
+    else
+    {
+      // production:
+      FB.init({appId: '0501aae0be4cc61f8b2bc429c994b7a0', status: true, cookie: true, xfbml: true});
+    }
+
+    // handle a session response from any of the auth related calls
+    function handleSessionResponse(response) {
+      // if we dont have a session, just hide the user info
+      console.log(response.session);
+      if (!response.session) {
+        $('#user-info').hide('fast');
+        foodz.user = false;
+        $('#login').show('fast');
+        $('#logout').hide('fast');
+        return;
+      }
+      else
+      {
+        foodz.display_user();
+      }
+    };
+
+    FB.getLoginStatus(handleSessionResponse);
+
+    foodz.display_user = function(){
+      $('#login').show('fast');
+      FB.api(
+        {
+          method: 'fql.query',
+          query: 'SELECT name, pic FROM profile WHERE id=' + FB.getSession().uid
+        },
+        function(response) {
+          var user = response[0];
+          foodz.user = user;
+          foodz.fb_session = FB.getSession();
+          foodz.user_id = foodz.fb_session.uid;
+          $('#user-info').html('<img style="width:76px;" src="' + user.pic + '">' + user.name).show('fast');
+          $('#login').hide('fast');
+          $('#logout').show('fast');
+        }
+      // if we have a session, query for the user's profile picture and name
+      );
+    };
+
+    $('#login').bind('click', function() {
+      FB.login(handleSessionResponse);
+    });
+
+    $('#logout').bind('click', function() {
+      FB.logout(handleSessionResponse);
+    });
+    foodz.display_user();
   })
 
 })(jQuery);
-
-      // production:
-      //FB.init({appId: '0501aae0be4cc61f8b2bc429c994b7a0', status: true, cookie: true, xfbml: true});
-1
-      // development:
-      FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true, xfbml: true});
-
-      // handle a session response from any of the auth related calls
-      function handleSessionResponse(response) {
-        // if we dont have a session, just hide the user info
-
-        console.log(response.session);
-        if (!response.session) {
-          $('#user-info').hide('fast');
-          foodz.user = false;
-          $('#login').show('fast');
-          $('#logout').hide('fast');
-          return;
-        }
-        else
-        {
-          foodz.display_user();
-        }
-      };
-
-      FB.getLoginStatus(handleSessionResponse);
-      foodz.display_user = function(){
-        $('#login').show('fast');
-        FB.api(
-          {
-            method: 'fql.query',
-            query: 'SELECT name, pic FROM profile WHERE id=' + FB.getSession().uid
-          },
-          function(response) {
-            var user = response[0];
-            foodz.user = user;
-            foodz.fb_session = FB.getSession();
-            foodz.user_id = foodz.fb_session.uid;
-            $('#user-info').html('<img style="width:76px;" src="' + user.pic + '">' + user.name).show('fast');
-            $('#login').hide('fast');
-            $('#logout').show('fast');
-          }
-        // if we have a session, query for the user's profile picture and name
-        );
-      };
-      $('#login').bind('click', function() {
-        FB.login(handleSessionResponse);
-      });
-
-      $('#logout').bind('click', function() {
-        FB.logout(handleSessionResponse);
-      });
-      foodz.display_user();
-
-
 
