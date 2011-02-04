@@ -71,22 +71,27 @@
   <script type="text/javascript" src="http://oauth.googlecode.com/svn/code/javascript/oauth.js"></script>
   <script type="text/javascript" src="http://oauth.googlecode.com/svn/code/javascript/sha1.js"></script>
   <script type="text/javascript" src="https://github.com/jamespadolsey/prettyPrint.js/raw/master/prettyprint.js"></script>
+  <script src="//connect.facebook.net/en_US/all.js"></script>
   <script>
-    window.fbAsyncInit = function() {
-      FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true,
-             xfbml: true});
-      FB.getLoginStatus(handleSessionResponse);
-    };
-    (function() {
-      var e = document.createElement('script'); e.async = true;
-      e.src = document.location.protocol +
-        '//connect.facebook.net/en_US/all.js';
-      document.getElementById('fb-root').appendChild(e);
-    }());
+   // some of this code was borrowed from https://github.com/facebook/connect-js/raw/master/examples/jquery/login.html
+//*TODO: Move this session managenent code into its own js file in the plugins folder.
+ 
+
+    //window.fbAsyncInit = function() {
+    //};
+    //(function() {
+    //  var e = document.createElement('script'); e.async = true;
+    //  e.src = document.location.protocol +
+    //    '//connect.facebook.net/en_US/all.js';
+    //  document.getElementById('fb-root').appendChild(e);
+    //}());
   </script>
-  <script src="js/plugins.js"></script>
-  <script src="js/sammy.js"></script>
-  <script src="js/lib/"></script>
+  <script src="js/libs/sammy.js"></script>
+  <script src="js/libs/sammy.nested_params.js"></script>
+  <script src="js/libs/sammy.template.js"></script>
+  <script src="js/libs/jquery.couch-0.11.js"></script>
+  <script src="js/libs/sammy.couch-0.1.0.js"></script>
+  <script src="js/plugins.js"></script>  
   <!-- <script src="js/app.js"></script>  -->
   <script src="js/script.js"></script>
   <!-- end concatenated and minified scripts-->
@@ -106,21 +111,25 @@
   <!-- asynchronous google analytics: mathiasbynens.be/notes/async-analytics-snippet
        change the UA-XXXXX-X to be your site's ID -->
   <script>
-   // some of this code was borrowed from https://github.com/facebook/connect-js/raw/master/examples/jquery/login.html
-//*TODO: Move this session managenent code into its own js file in the plugins folder.
- 
+      FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true,
+             xfbml: true});
       // handle a session response from any of the auth related calls
       function handleSessionResponse(response) {
         // if we dont have a session, just hide the user info
         if (!response.session) {
           $('#user-info').hide('fast');
-          //foodz.user = false;
+          foodz.user = false;
           $('#login').show('fast');
           $('#logout').hide('fast');
           return;
         }
+        else
+        {
+          foodz.display_user();
+        }
+      };
 
-        // if we have a session, query for the user's profile picture and name
+      foodz.display_user = function(){
         FB.api(
           {
             method: 'fql.query',
@@ -135,9 +144,9 @@
             $('#login').hide('fast');
             $('#logout').show('fast');
           }
+        // if we have a session, query for the user's profile picture and name
         );
-      }
-
+      };
       $('#login').bind('click', function() {
         FB.login(handleSessionResponse);
       });
@@ -145,7 +154,8 @@
       $('#logout').bind('click', function() {
         FB.logout(handleSessionResponse);
       });
-
+      FB.getLoginStatus(handleSessionResponse);
+      foodz.display_user();
 
    //var _gaq = [['_setAccount', 'UA-XXXXX-X'], ['_trackPageview']];
    //(function(d, t) {

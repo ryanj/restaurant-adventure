@@ -101,7 +101,7 @@ foodz.find = function( mode, params )
   //this.dev_mode = false;
   if( this.dev_mode === true ){ 
     $.ajax({
-      'url': 'http://localhost:3000/js/beerbar_results.json',
+      'url': 'js/beerbar_results.json',
       'dataType': 'json',
       'success': function(data, textStats, XMLHttpRequest) {
         foodz.yelp_data_callback(data);
@@ -245,7 +245,7 @@ foodz.mark_favorite = function(user_id, yelp_id)
   var app = $.sammy('#main', function() {
     this.debug = true;
     //this.use(Sammy.Cache);
-    this.use(Sammy.Template, 'erb');
+    //this.use(Sammy.Template, 'erb');
 
     var db = null;
     var db_loaded = false;
