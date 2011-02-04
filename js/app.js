@@ -1,9 +1,4 @@
-/* Author: 
-
-*/
-//  function initialize() {
-//  }
-
+//Yelp wrapper and google maps glue
 var foodz = {
   //Search defaults:
   search_location_text: "Oakland, CA",
@@ -11,6 +6,8 @@ var foodz = {
   search_location_long: "-122.270833",
   search_terms: 'beer',
   user: false,
+  dev_mode: true,
+  //dev_mode: false,
   //search_category: "bars"
   search_category: "restaurant",
   auth: {
@@ -94,8 +91,6 @@ foodz.find = function( mode, params )
     parameters.push(['location', foodz.search_location_text]);
   }
 
-  this.dev_mode = true;
-  //this.dev_mode = false;
   if( this.dev_mode === true ){ 
     $.ajax({
       'url': 'js/beerbar_results.json',
@@ -180,6 +175,7 @@ foodz.add_yelp_marker_to_map = function( yelp ){
 
 foodz.handleMapItemClick = function(e){
   console.log( 'clicked on: ' + e.currentTarget.title);
+  //trigger 
   foodz.toggleMarkerBounce( foodz.yelp.markers[ e.currentTarget.title ] );
 };
 
@@ -408,7 +404,7 @@ foodz.clear_markers = function( )
     foodz.draw_map();
     app.run('#/');
 
-    if( foodz.dev_mode === true ){ 
+    if( foodz.dev_mode === true){ 
       // development:
       FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true, xfbml: true});
     }
@@ -449,7 +445,7 @@ foodz.clear_markers = function( )
           foodz.user = user;
           foodz.fb_session = FB.getSession();
           foodz.user_id = foodz.fb_session.uid;
-          $('#user-info').html('<img style="width:76px;" src="' + user.pic + '">' + user.name).show('fast');
+          $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + foodz.user_id + '/"><img style="width:76px;" src="' + user.pic + '">' + user.name + '</a>' ) .show('fast');
           $('#login').hide('fast');
           $('#logout').show('fast');
         }
