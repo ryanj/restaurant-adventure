@@ -38,11 +38,11 @@
   <script src="js/libs/modernizr-1.6.min.js"></script>
 
 </head>
-<body>
-  <div id="container">
+<body style='width:100%;height:100%'>
+  <div id="container" style='width:100%;height:100%'>
     <header>
-      <div style='position:absolute;top:2.5em;right:0px;z-index:100;width:100px;' id='fb-root'>
-        <div id="user-info" style="display: none;"></div>
+      <div style='position:absolute;top:2.5em;right:0px;z-index:100;width:76px;background-color:#FFFFFF;' id='fb-root'>
+        <div id="user-info" style="width:76px;display: none;"></div>
         <div>
           <button style='display:none;' id="login">Login</button>
           <button style='display:none;' id="logout">Logout</button>
@@ -71,7 +71,7 @@
   <script type="text/javascript" src="http://oauth.googlecode.com/svn/code/javascript/oauth.js"></script>
   <script type="text/javascript" src="http://oauth.googlecode.com/svn/code/javascript/sha1.js"></script>
   <script type="text/javascript" src="https://github.com/jamespadolsey/prettyPrint.js/raw/master/prettyprint.js"></script>
-  <script src="//connect.facebook.net/en_US/all.js"></script>
+  <script src="http://connect.facebook.net/en_US/all.js"></script>
   <script>
    // some of this code was borrowed from https://github.com/facebook/connect-js/raw/master/examples/jquery/login.html
 //*TODO: Move this session managenent code into its own js file in the plugins folder.
@@ -115,6 +115,8 @@
       // handle a session response from any of the auth related calls
       function handleSessionResponse(response) {
         // if we dont have a session, just hide the user info
+
+        console.log(response.session);
         if (!response.session) {
           $('#user-info').hide('fast');
           foodz.user = false;
@@ -128,7 +130,9 @@
         }
       };
 
+      FB.getLoginStatus(handleSessionResponse);
       foodz.display_user = function(){
+        $('#login').show('fast');
         FB.api(
           {
             method: 'fql.query',
@@ -136,10 +140,10 @@
           },
           function(response) {
             var user = response[0];
-            //foodz.user = user;
-            //foodz.fb_session = FB.getSession();
-            //foodz.user_id = foodz.fb_session.uid;
-            $('#user-info').html('<img src="' + user.pic + '">' + user.name).show('fast');
+            foodz.user = user;
+            foodz.fb_session = FB.getSession();
+            foodz.user_id = foodz.fb_session.uid;
+            $('#user-info').html('<img style="width:76px;" src="' + user.pic + '">' + user.name).show('fast');
             $('#login').hide('fast');
             $('#logout').show('fast');
           }
@@ -153,7 +157,6 @@
       $('#logout').bind('click', function() {
         FB.logout(handleSessionResponse);
       });
-      FB.getLoginStatus(handleSessionResponse);
       foodz.display_user();
 
    //var _gaq = [['_setAccount', 'UA-XXXXX-X'], ['_trackPageview']];

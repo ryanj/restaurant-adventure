@@ -244,11 +244,15 @@ foodz.mark_favorite = function(user_id, yelp_id)
 ;(function($) {
   var app = $.sammy('#main', function() {
     this.debug = true;
-    //this.use(Sammy.Cache);
-    //this.use(Sammy.Template, 'erb');
-
     var db = null;
     var db_loaded = false;
+    //this.use(Sammy.Cache);
+    //
+    //this.use(Sammy.Template, 'erb');
+    this.use('Template');
+    this.use('Couch');
+    this.use('NestedParams');
+    this.db = $.couch.db("restaurant_adventure");
 
     this.before(function() {
       if (!db_loaded) {
@@ -370,7 +374,7 @@ foodz.mark_favorite = function(user_id, yelp_id)
 //          context.trigger('error', {message: 'Could not connect to CloudKit.'})
 //        }
 //      });
-//
+
 //      $('li.task :checkbox').live('click', function() {
 //        var $task = $(this).parents('.task');
 //        context.trigger('task-toggle', {$task: $task});
