@@ -1,4 +1,113 @@
-//Yelp wrapper and google maps glue
+//TODO: build a Yelp sammy plugin
+var YelpLib = function(app) {
+  this.helpers({
+    yelp_by_term_and_location: function( search_terms, location_text ){
+      this.find_by_term( search_terms );
+    }
+  });
+};
+// A google maps plugin
+var GoogleMapsLib = function(app) {
+  this.helpers({
+    draw_map: function( lat, long ){
+      this.latlng = new google.maps.LatLng( lat, long );
+      this.myMapOptions = {
+        zoom: 14,
+        center: this.latlng,
+        mapTypeId: google.maps.MapTypeId.ROADMAP
+      };
+      this.map = new google.maps.Map(document.getElementById("map_canvas"), this.myMapOptions);
+    }
+  });
+};
+
+// A connect-js wrapper?
+var FBConnect = function(app) {
+  this.helpers({
+    fb_init: function( app_id ){
+      FB.init({appId: app_id, status: true, cookie: true, xfbml: true});
+
+      FB.getLoginStatus(this.handleSessionResponse);
+
+      $('#login').bind('click', function() {
+        FB.login(this.handleSessionResponse);
+      });
+
+      $('#logout').bind('click', function() {
+        FB.logout(this.handleSessionResponse);
+      });
+    },
+
+    login_click_handler: function(){FB.login(this.handleSessionResponse);},
+
+    // handle a session response from any of the auth related calls
+    handleSessionResponse: function(response) {
+      console.log(response.session);
+      if (!response.session) {
+        $('#user-info').hide('fast');
+        foodz.user = false;
+        foodz.user.id = 0;
+        $('#login').show('fast');
+        $('#logout').hide('fast');
+        return;
+      }
+      else if(response.session.uid != 0){
+        this.user_id = response.session.uid;
+        this.fb_session = response.session.uid;
+
+        foodz.app.db.openDoc(this.user_id, {
+          success: function(response) {
+            foodz.user = response;
+            $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + foodz.user.id + '/"><img style="width:76px;" src="' + foodz.user.pic + '">' + foodz.user.name + '</a>' ).show('fast');
+            //$('#user-info').show('fast');
+            //log(response);
+            $('#main').dialog("close");
+          },
+          error: function(response) {
+            FB.api(
+              {
+                method: 'fql.query',
+                query: 'SELECT id, name, pic FROM profile WHERE id=' + FB.getSession().uid
+              },
+              function(response) {
+                // .then save user to db
+                this.user = response[0];
+                this.user['_id'] = this.user.id;
+                $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + this.user.id + '/"><img style="width:76px;" src="' + this.user.pic + '">' + this.user.name + '</a>' ) .show('fast');
+                $('#login').hide('fast');
+                $('#logout').hide('fast');
+                $('#user-info').show('fast');
+                this.user['type'] = 'user';
+                foodz.user = this.user;
+                foodz.app.db.saveDoc( this.user );
+                log('created a new user account for: ' + this.user.name);
+                $('#main').dialog("close");
+              }
+            );
+          } 
+        });
+      }
+    },
+
+    get_current_user_id : function() {
+      return FB.getSession().uid;
+    },
+
+    get_fb_user: function( id ) {
+      FB.api(
+        {
+          method: 'fql.query',
+          query: 'SELECT id, name, pic FROM profile WHERE id=' + id
+        },
+        function(response) {
+          response[0]['_id'] = id;
+          return response[0];
+        }
+      );
+    },
+  });
+};
+
 var foodz = {
   //Search defaults:
   search_location_text: "Oakland, CA",
@@ -161,7 +270,6 @@ foodz.add_yelp_marker_to_map = function( yelp ){
   {
     latt = yelp.location.coordinate.latitude;
     lngt = yelp.location.coordinate.longitude;
-    
   }
   marker = {
     position: new google.maps.LatLng(latt, lngt),
@@ -176,7 +284,11 @@ foodz.add_yelp_marker_to_map = function( yelp ){
 foodz.handleMapItemClick = function(e){
   console.log( 'clicked on: ' + e.currentTarget.title);
   //trigger 
-  foodz.toggleMarkerBounce( foodz.yelp.markers[ e.currentTarget.title ] );
+  app = Sammy.apps['#main'];
+  app.trigger('load-restaurant', { id: e.currentTarget.title } );
+
+  //foodz.toggleMarkerBounce( foodz.yelp.markers[ e.currentTarget.title ] );
+  //foodz.toggleMarkerBounce( foodz.yelp.markers[ e.currentTarget.title ] );
 };
 
 foodz.toggleMarkerBounce = function( marker ){
@@ -199,20 +311,34 @@ foodz.clear_markers = function( )
 };
 
 
+//             ^^     MAP AND YELP INTERACTION ABOVE     ^^
+
+///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////
+
+//        Sammy - couchdb models: { user, restaurant }, controllers, views, events
+
+
 ///SAMMY app:
 ;(function($) {
   var app = $.sammy('#main', function() {
+    //  INITIALIZE OUR LOCAL STATE:
     this.debug = true;
     this.foodz = foodz;
     var db = null;
     var db_loaded = false;
-    //this.use(Sammy.Cache);
-    //
-    //this.use(Sammy.Template, 'erb');
-    this.use('Template');
-    this.use('Couch');
-    this.use('NestedParams');
 
+    // APPLICATION PLUGINS:
+    //this.use(Sammy.Cache);
+    this.use('Template', 'erb');
+    this.use('Couch');
+    //this.use(YelpLib);
+    //this.use(GoogleMapsLib);
+    this.use(FBConnect);
+    //this.use('NestedParams');
+
+    // a BEFORE FILTER for routes    .. (just for routes, right?)
     this.before(function() {
       if (!db_loaded) {
         //this.redirect('#/connecting');
@@ -221,77 +347,112 @@ foodz.clear_markers = function( )
       }
     });
 
-    // write! - should this be a put or post?  or *not* bookmarkable?
-    this.post('#/favorites/', function(context) {
+    // CONTROLLER ACTIONS
+
+    // POST - write!
+    this.post('#/favorite/:id/', function(context) {
       //must be logged in!
       // TODO: if not logged in redirect to login page
-  //this.favorites.users[user_id].append(yelp_id);
-  //this.users.favorites[yelp_id].append(user_id);
+      //this.favorites.users[user_id].append(yelp_id);
+      //this.users.favorites[yelp_id].append(user_id);
+      if( foodz.user == false )
+      {
+        context.redirect('#/login/');
+      }
 
       //FB.ui popup publish offer on fave()/save()?
       context.log('mark a restaurant as a favorite');
 
       yelp_id = this.params['id'];
+      user_id = foodz['user']['id'];
+      user_name = foodz.user.name;
 
-      var favorite  = {
-        yelp_id: yelp_id,
-        user_id: user_id,
-        type: "favorite",
-        //TODO: SET THE USER ID!
-        name: name, 
-        image_url: image_url, 
-        yelp_url: yelp_url,
-        // foodz.user_id
-        user_id: foodz.user_id,
-        created_at: Date()
-      };
-      db.collection('favorites').create(favorite, {
-        success: function(favorite) {
-         // context.partial('/templates/task.html.erb', {task: task}, function(task_html) {
-         //   $('#tasks').prepend(task_html);
-         // });
+      this.db.openDoc(yelp_id, {
+        success: function(response) {
+          favorite = response;
+          if(!foodz.yelp.businesses[yelp_id]){
+            foodz.yelp.businesses[yelp_id] = favorite;
+          }
+          //update record
+          favorite.users[user_id] = user_name; 
+          foodz.app.db.saveDoc( favorite );
         },
-        error: function() {
-          context.trigger('error', {message: 'Sorry, could not save your task.'})
+        error: function(response) {
+          if(foodz.yelp.businesses[yelp_id]){
+            favorite = {
+              'yelp_id': yelp_id,
+              'type': "favorite",
+              'name': foodz.yelp.businesses[yelp_id]['name'], 
+              'rating': foodz.yelp.businesses[yelp_id]['rating_img_url'], 
+              'href': foodz.yelp.businesses[yelp_id]['url'],
+              'location': foodz.yelp.businesses[yelp_id]['city'],
+              'state': foodz.yelp.businesses[yelp_id]['state'],
+              'users': { user_id: user_name },
+              'lat' : foodz.yelp.businesses[yelp_id]['latitude'],
+              'long' : foodz.yelp.businesses[yelp_id]['longitude'], 
+            };
+            foodz.app.db.saveDoc( favorite );
+          }else{
+            //TODO: look this up via yelp
+            record = foodz.find('id', yelp_id);
+            favorite  = {
+              'yelp_id': yelp_id,
+              'type': "favorite",
+              'name': record.businesses[yelp_id]['name'], 
+              'rating': record.businesses[yelp_id]['rating_img_url'], 
+              'href': record.businesses[yelp_id]['url'],
+              'location': record.businesses[yelp_id]['city'] + ", " + record.businesses[yelp_id]['state'],
+              'users': { user_id: user_name }
+            };
+            if( this.dev_mode === true ) {
+              favorite['lat'] = record.businesses[yelp_id]['latitude']; 
+              favorite['long'] = record.businesses[yelp_id]['longitude']; 
+            } else {
+              favorite['lat'] = record.businesses[yelp_id]['location']['coordinate']['latitude'];
+              favorite['long'] = record.businesses[yelp_id]['location']['coordinate']['longitude']; 
+            }
+            foodz.app.db.saveDoc( favorite );
+          }
+        }
+      });
+      // fave_user and user_fave
+      this.db.openDoc( foodz.user.id, {
+        success: function(response) {
+          foodz.user = response;
+          //update record
+          if( !foodz.user.favorites)
+          { foodz.user.favorites = {}; }
+          foodz.user.favorites[yelp_id] = favorite; 
+          foodz.app.db.saveDoc( foodz.user );
         }
       });
       this.redirect('#/restaurant/' + yelp_id + '/');
-    });
-
-    this.get('#/add_a_favorite_test', function(context) {
-
-      // if not logged in, send to login prompt
-      this.db.saveDoc(
-        {_id: yelp_id, type: "favorite", user_id: user_id, name: name, image_url: image_url, yelp_url: yelp_url, created_at: Date()},
-        {   
-          success: function(resp) {
-            log("success: favorite added");
-            log(resp);
-          },  
-          failure: function(resp) {
-            log("failure: could not add a favorite");
-            log(resp);
-          }   
-        }   
-      );  
-      this.redirect('#/restaurant/' + yelp_id + '/');
     }); 
 
+    this.post('#/search/', function(context) {
+      foodz.find('term', 'Beer');
+      $('#main').dialog('close');
+    });
 
     // read-only urls:
     this.get('#/restaurant/:id/', function(context) {
-      //include favorite count if any
       //get restaurant / favorite detail html by yelp_id
+      id = this.params['id'];
+      log('detail view of ' + foodz.yelp.businesses[id].name );
+      $('#ui-dialog-title-main').html('Restaurant');
+      this.restaurant = foodz.yelp.businesses[id];
+      this.restaurant['favorite'] = false;
+      this.restaurant['user_count'] = 0;
+      sometext = this.partial('templates/restaurant.html.erb');
+      $('#main').dialog('open');
+
       //print favorite_count
-      id = params['id'];
-      console.log('detail view of ' + foodz.yelp.businesses[id].name );
-
-
-      //this.task = db.collection('tasks').get(this.params['id']).json();
-      //this.partial('/templates/task_details.html.erb')
-
-      //provide a link to '#/favorite/:id/users/' list view
       //FB.ui popup publish offer on fave()/save()?
+
+      //this.favorite = db.collection('favorites').get(this.params['id']).json();
+      //this.partial('/templates/task_details.html.erb')
+      //provide a link to '#/favorite/:id/users/' list view
+
     });
     this.get('#/favorite/:id/users/', function(context) {
       //ask the user to log in!!
@@ -301,18 +462,30 @@ foodz.clear_markers = function( )
         context.log('all users who consider this restaurant a favorite');
     });
     this.get('#/favorites/', function(context) {
-      //  TODO: visually cycle through the 20 most recent favorites
-      //  pan/zoom the map, fade in overlay info
-      foodz.find('term', 'Beer');
-      context.log('recent favorites');
+      if(foodz.dev_mode === true ){
+        foodz.find('term', 'Beer');
+      }else{
+        //  TODO: visually cycle through the 20 most recent favorites
+        //  pan/zoom the map, fade in overlay info
+        foodz.find('term', 'Beer');
+      }
+      $('#ui-dialog-title-main').html('Top Favorites');
+      new_html = '<div><p>add a text-based list here as well?</p></div>'; 
+      $('#main').html(new_html);
+      $('#main').dialog('open');
     });
     this.get('#/search/', function(context) {
-      context.log('search');
+      $('#ui-dialog-title-main').html('Search');
+      new_html = '<div><form action="#/search/" method="post"> <label>Search:</label> <br/>';
+      new_html += '<input name="search_term" id="search_term" style="color:#CCC;" type="text"/><input value="Search" type="submit" /></div>'; 
+      $('#main').html(new_html);
+      $('#main').dialog('open');
     });
     this.get('#/settings/', function(context) {
       // logout / disconnect
       //<button style='display:none;' id="disconnect">Disconnect</button>
       //<button style='display:none;' id="logout">Logout</button>
+      $('#main').dialog('open');
       context.log('app settings');
     });
     this.get('#/user/:id/favorites/', function(context) {
@@ -321,147 +494,127 @@ foodz.clear_markers = function( )
       //Logged-In only?  load login prompt?
       alert('list view of favorites per user ' + id);
     });
-    this.get('#/user/:id/', function(context) {
-      //get user detail html by facebook_id
-      //user = foodz.get('user', id);
-      //html = '<div>user</div>';
-      //html.showzizzle();
 
-      //Logged-In only?  load login prompt?
-      alert('detail view of user ' + id);
+    this.get('#/menu/', function(context) {
+      $('#ui-dialog-title-main').html('MENU');
+      new_html = "<p><a href='#/search/'>search</a></p><p><a href='#/favorites/'>favorites</a></p>";
+      new_html += "<p><a href='#/users/'>users</a></p><p><a href='#/about/'>about</a></p>";
+      if( foodz.user !== false){ new_html += "<p><a href='#/user/"+foodz.user.id+"/'>my_profile</a></p>"; }
+      $('#main').html(new_html);
+      $('#main').dialog('open');
+    }); 
+
+    this.get('#/users/', function(context) {
+      $('#ui-dialog-title-main').html('Users');
+      new_html = "<p>loading...</p>";
+      $('#main').html(new_html);
+      //only available to logged in users?  load login prompt?
+      //this.id = this.params['id'];
+      //context.log("user detail view: " + this.id);
+      //if( foodz.user !== false && foodz.user.id == this.id){
+      //  this.user = foodz.user;
+      //}else{
+      //  this.user = foodz.app.db.loadDoc(this.id); 
+      //}
       //include favorite count if any
-      //only available to logged in users?
-
-      //this.task = db.collection('tasks').get(this.params['id']).json();
-      //this.partial('/templates/task_details.html.erb')
-      context.log('user detail view');
+      //context.render( 'templates/user.html.erb', user );
+      //this.partial('templates/user.html.erb');
+      $('#main').dialog('open');
     });
+
+    this.get('#/user/:id/', function(context) {
+      //only available to logged in users?  load login prompt?
+      this.id = this.params['id'];
+      context.log("user detail view: " + this.id);
+      if( foodz.user !== false && foodz.user.id == this.id){
+        this.user = foodz.user;
+      }else{
+        this.user = foodz.app.db.loadDoc(this.id); 
+      }
+      $('#ui-dialog-title-main').html(this.user.name);
+      //include favorite count if any
+      //context.render( 'templates/user.html.erb', user );
+      this.partial('templates/user.html.erb');
+      $('#main').dialog('open');
+    });
+
+    this.get('#/login/', function(context) {
+      //login?
+      $('#ui-dialog-title-main').html('Would you like to login?');
+      new_html = "<p>Sorry. Some features of this site require an authorized account in order to work.  Please try logging in to enable more advanced features.</p><p><button id='login_button'>Login with Facebook</button></p>";
+      $('#main').html(new_html);
+      //context.login_click_handler();
+      //log(context.login_click_handler());
+      //$('#login_button').bind('click', this.login_click_handler());
+      //this.login_click_handler('#login_button');
+      //log(this.login_click_handler());
+      //this.login_click_handler();
+      //login_click_handler('#login_button');
+      $('#main').dialog('open');
+      $('#login_button').bind('click', this.login_click_handler );
+    });
+
     this.get('#/about/', function(context) {
       //welcome / about this app
-      context.log('about');
+      $('#ui-dialog-title-main').html('About');
+      new_html = "<p>Welcome!  This couchdb demo app is currently under development.  you can find more info on <a href='https://github.com/ryanjarvinen/restaurant-adventure'>https://github.com/ryanjarvinen/restaurant-adventure</a>.</p>";
+      $('#main').html(new_html);
+      $('#main').dialog('open');
     });
 
     this.get('#/', function(context) {
+      if( $('#main').dialog('isOpen'))
+      { $('#main').dialog('close');}
       //default view:
       //*TODO: attempt to auto locate the search (if possible)
       //*HACK: for now, redirect to the favorites page, get straight to the action.
-      this.redirect('#/favorites/');
-      //this.redirect('#/about/');
+      //this.redirect('#/favorites/');
+      //this.redirect('#/menu/');
+      //this.redirect('#/menu/');
       //popup location search box
       //this.redirect('#/search/');
     });
 
-
-  this.get('#/connecting', function() {
-    //*TODO: welcome message, tos?
-    //  $('#main').html('<span class="loading">... Loading ...</span>');
-
-  });
-
-//    this.bind('task-toggle', function(e, data) {
-//      this.log('data', data)
-//      var $task = data.$task;
-//      this.task = db.collection('tasks').get($task.attr('id'));
-//      this.task.attr('completed', function() { return (this == true ? false : true); });
-//      this.task.update({}, {
-//        success: function() {
-//          $task.toggleClass('completed');
-//        }
-//      });
-//    });
-
     this.bind('run', function() {
       var context = this;
+      // initialize our map
+      foodz.draw_map();
+      //initialize facebook api
+      app_id = '0501aae0be4cc61f8b2bc429c994b7a0'; // production:
+      if( foodz.dev_mode === true){ app_id = 'e0e601064838428368f05fe285c14e41'; } // development
+      this.fb_init(app_id);
+
+      //load a handler to our database
       this.db = $.couch.db("restaurant_adventure");
-//      db = $.cloudkit;
-//      db.boot({
-//        success: function() {
-//          this.db_loaded = true;
-//          context.trigger('db-loaded');
-//        },
-//        failure: function() {
-//          db_loaded = false;
-//          context.trigger('error', {message: 'Could not connect to CloudKit.'})
-//        }
-//      });
 
-//      $('li.task :checkbox').live('click', function() {
-//        var $task = $(this).parents('.task');
-//        context.trigger('task-toggle', {$task: $task});
-//      });
+      $('#main').dialog({modal:true, autoOpen: false, width: 500, close: function(event, ui) { context.redirect('#/'); }});
+      
+      $('#menu_button').bind('click', function() {
+        context.redirect('#/menu/');
+      });
+      
+      //var xhr = this.db.request("GET", "/doc1", {
+      //  body: JSON.stringify({"foo":"bar"}),
+      //  headers: {"Content-Type": "application/json"}
+      //});
+      //var resp = JSON.parse(xhr.responseText);
+      //console.log(resp);
+      //context.log(resp);
     });
 
-    this.bind('db-loaded', function() {
-      this.redirect('#/welcome/');
+    this.bind('load-restaurant', function( e, data) {
+      this.redirect('#/restaurant/' + data.id + '/');
     });
 
-    this.bind('error', function(e, data) {
-      $('#error').text(data.message).show();
-    });
+    //this.bind('error', function(e, data) {
+    //  $('#error').text(data.message).show();
+    //});
   });
 
   $(function() {
-    foodz.draw_map();
     app.run('#/');
-
-    if( foodz.dev_mode === true){ 
-      // development:
-      FB.init({appId: 'e0e601064838428368f05fe285c14e41', status: true, cookie: true, xfbml: true});
-    }
-    else
-    {
-      // production:
-      FB.init({appId: '0501aae0be4cc61f8b2bc429c994b7a0', status: true, cookie: true, xfbml: true});
-    }
-
-    // handle a session response from any of the auth related calls
-    function handleSessionResponse(response) {
-      // if we dont have a session, just hide the user info
-      console.log(response.session);
-      if (!response.session) {
-        $('#user-info').hide('fast');
-        foodz.user = false;
-        $('#login').show('fast');
-        $('#logout').hide('fast');
-        return;
-      }
-      else
-      {
-        foodz.display_user();
-      }
-    };
-
-    FB.getLoginStatus(handleSessionResponse);
-
-    foodz.display_user = function(){
-      $('#login').show('fast');
-      FB.api(
-        {
-          method: 'fql.query',
-          query: 'SELECT name, pic FROM profile WHERE id=' + FB.getSession().uid
-        },
-        function(response) {
-          var user = response[0];
-          foodz.user = user;
-          foodz.fb_session = FB.getSession();
-          foodz.user_id = foodz.fb_session.uid;
-          $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + foodz.user_id + '/"><img style="width:76px;" src="' + user.pic + '">' + user.name + '</a>' ) .show('fast');
-          $('#login').hide('fast');
-          $('#logout').show('fast');
-        }
-      // if we have a session, query for the user's profile picture and name
-      );
-    };
-
-    $('#login').bind('click', function() {
-      FB.login(handleSessionResponse);
-    });
-
-    $('#logout').bind('click', function() {
-      FB.logout(handleSessionResponse);
-    });
-    foodz.display_user();
   })
 
 })(jQuery);
 
+foodz.app = Sammy.apps['#main'];

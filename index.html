@@ -30,6 +30,8 @@
     html { height: 100% }
     body, #container { height: 100%; margin: 0px; padding: 0px }
     #map_canvas { height: 100% }
+    h1{ color:white; bg-color:black;}
+    #main { width:80%; height:80%;}
   </style>
 
   <!-- Uncomment if you are specifically targeting less enabled mobile browsers
@@ -44,15 +46,16 @@
 
     <header>
       <div style='position:absolute;top:2.5em;right:0px;z-index:100;width:76px;background-color:#FFFFFF;' id='fb-root'>
+        <button style='width:100%;' id="menu_button">MENU</button>
         <div id="user-info" style="width:76px;display: none;"></div>
-        <button style='display:none;' id="login">Login</button>
+        <button style='width:100%;display:none;' id="login">Login</button>
       </div> 
     </header>
 
-      <!--  Overlay / Menu 
-      <div id='main' style='background-color:#FFF;'><h1>Loading...</h1><div id='menu_body'>Javascript must be enabled in order to run this app</div> </div>
+      <!--  Overlay / Menu -->
+      <div id='main' style='display:none;'><h1>Loading...</h1><div id='menu_body'>Javascript must be enabled in order to run this app</div> </div>
       <script type='text/javascript'>document.getElementById('menu_body').innerHTML = 'Loading';</script>
--->
+
     <div id="map_canvas" style="width:100%; height:100;%">
     </div>
 
@@ -79,7 +82,7 @@
   <script src="js/libs/sammy.js"></script>
   <script src="js/libs/jquery-ui-1.8.9.custom.min.js"></script>
   <script src="js/libs/jquery.couch-0.11.js"></script>
-  <script src="js/libs/sammy.nested_params.js"></script>
+  <!-- <script src="js/libs/sammy.nested_params.js"></script> //  dont need this until we have complex nested form data to process -->
   <script src="js/libs/sammy.template.js"></script>
   <script src="js/libs/sammy.couch-0.1.0.js"></script>
   <script src="js/plugins.js"></script>  

@@ -1,0 +1,8 @@
+<div id="restaurant_<%= restaurant.id %>">
+  <h1><%= restaurant.name %></h1>
+  <a href='<%= restaurant.url %>'><img src='<%= restaurant.rating_img_url %>'/></a>
+  <p><%= restaurant.city + ', '+ restaurant.state %></p>
+  <p><form action='#/favorite/<%= restaurant.id %>/' method="post"><input type='submit' value='Save this restaurant as one of your favorites!'/></form></p>
+  <p>users who like this:<%= ' ' + restaurant.user_count %></p>
+  <p>user list</p>
+</div>
