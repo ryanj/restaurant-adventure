@@ -6,6 +6,7 @@ var YelpLib = function(app) {
     }
   });
 };
+
 // A google maps plugin
 var GoogleMapsLib = function(app) {
   this.helpers({
@@ -21,47 +22,37 @@ var GoogleMapsLib = function(app) {
   });
 };
 
-// A connect-js wrapper?
+// A connect-js plugin / wrapper
 var FBConnect = function(app) {
   this.helpers({
+    login_check: function(){FB.getLoginStatus(this.handleSessionResponse);},
+    
     fb_init: function( app_id ){
       FB.init({appId: app_id, status: true, cookie: true, xfbml: true});
-
-      FB.getLoginStatus(this.handleSessionResponse);
-
-      $('#login').bind('click', function() {
-        FB.login(this.handleSessionResponse);
+      $('#login').show().bind('click', function() {
+        FB.login();
       });
-
       $('#logout').bind('click', function() {
-        FB.logout(this.handleSessionResponse);
+        FB.logout();
       });
+      FB.Event.subscribe('auth.sessionChange', this.handleSessionResponse );
+      FB.getLoginStatus(this.handleSessionResponse);
     },
-
-    login_click_handler: function(){FB.login(this.handleSessionResponse);},
 
     // handle a session response from any of the auth related calls
     handleSessionResponse: function(response) {
-      console.log(response.session);
       if (!response.session) {
-        $('#user-info').hide('fast');
         foodz.user = false;
-        foodz.user.id = 0;
-        $('#login').show('fast');
-        $('#logout').hide('fast');
+        foodz.hide_user();
         return;
       }
       else if(response.session.uid != 0){
         this.user_id = response.session.uid;
-        this.fb_session = response.session.uid;
-
         foodz.app.db.openDoc(this.user_id, {
           success: function(response) {
+            //welcome back!
             foodz.user = response;
-            $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + foodz.user.id + '/"><img style="width:76px;" src="' + foodz.user.pic + '">' + foodz.user.name + '</a>' ).show('fast');
-            //$('#user-info').show('fast');
-            //log(response);
-            $('#main').dialog("close");
+            foodz.display_user();
           },
           error: function(response) {
             FB.api(
@@ -70,17 +61,12 @@ var FBConnect = function(app) {
                 query: 'SELECT id, name, pic FROM profile WHERE id=' + FB.getSession().uid
               },
               function(response) {
-                // .then save user to db
-                this.user = response[0];
                 this.user['_id'] = this.user.id;
-                $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + this.user.id + '/"><img style="width:76px;" src="' + this.user.pic + '">' + this.user.name + '</a>' ) .show('fast');
-                $('#login').hide('fast');
-                $('#logout').hide('fast');
-                $('#user-info').show('fast');
                 this.user['type'] = 'user';
-                foodz.user = this.user;
                 foodz.app.db.saveDoc( this.user );
+                foodz.user = this.user;
                 log('created a new user account for: ' + this.user.name);
+                foodz.display_user();
                 $('#main').dialog("close");
               }
             );
@@ -115,9 +101,6 @@ var foodz = {
   search_location_long: "-122.270833",
   search_terms: 'beer',
   user: false,
-  dev_mode: true,
-  //dev_mode: false,
-  //search_category: "bars"
   search_category: "restaurant",
   auth: {
     consumerKey: "k2ZeH3UcgrEAyOl9Lsj_uQ",
@@ -152,15 +135,26 @@ foodz.yelp_data_callback = function(data){
   foodz.search_results = data;
   for( i=0; i < data.businesses.length ; i++)
   {
-    foodz.add_yelp_marker_to_map(data.businesses[i]);
     foodz.yelp.businesses[data.businesses[i].id] = data.businesses[i];
+    foodz.yelp.businesses[data.businesses[i].id]['_id'] = data.businesses[i].id;
+    foodz.yelp.businesses[data.businesses[i].id]['lat'] = data.businesses[i]['location']['coordinate']['latitude'];
+    foodz.yelp.businesses[data.businesses[i].id]['long'] = data.businesses[i]['location']['coordinate']['longitude'];
+    foodz.yelp.businesses[data.businesses[i].id]['location'] = data.businesses[i]['location']['city'] + ', ' + data.businesses[i]['location']['state_code'];
+    foodz.add_marker_to_map(foodz.yelp.businesses[data.businesses[i].id]);
   }
-  //add event listeners to all map search results
-  for( marker_id in foodz.yelp.markers)
-  {
-    console.log(foodz.yelp.markers[marker_id].title);
-    google.maps.event.addListener( foodz.yelp.markers[marker_id], 'click', foodz.handleMapItemClick);
-  }
+};
+
+foodz.hide_user = function(){ 
+  $('#user-info').hide('fast');
+  $('#login').show('fast');
+  $('#logout').hide('fast');
+};
+
+foodz.display_user = function(){ 
+  $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + this.user.id + '/"><img style="width:76px;" src="' + this.user.pic + '">' + this.user.name + '</a>' ) .show('fast');
+  $('#login').hide('fast');
+  $('#logout').hide('fast');
+  $('#user-info').show('fast');
 };
 
 foodz.find = function( mode, params ) 
@@ -179,15 +173,16 @@ foodz.find = function( mode, params )
     'parameters': parameters 
   };
   
-  if( mode == 'terms' )
+  if( mode == 'term' )
   {
     foodz.search_category = params;
-    parameters.push(['location', foodz.search_location_text]);
-    parameters.push(['term', foodz.search_category]);
+    message.parameters.push(['location', foodz.search_location_text]);
+    message.parameters.push(['term', params]);
   }
   else if( mode == 'location')
   {
-    parameters.push(['location', foodz.search_location_text]);
+    foodz.search_location_text = params;
+    message.parameters.push(['location', foodz.search_location_text]);
   }
   else if( mode == 'id')
   {
@@ -195,37 +190,35 @@ foodz.find = function( mode, params )
   }
   else
   {
-    mode = 'location';
-    foodz.search_location_text = 'oakland, ca';
-    parameters.push(['location', foodz.search_location_text]);
+    log('oh noes!, this is a bad error!');
+    log('What did you intend to search for? Search params are missing...  sending results for coffee locations.');
+    mode = 'term';
+    message.parameters.push(['term', 'coffee']);
   }
 
-  if( this.dev_mode === true ){ 
-    $.ajax({
-      'url': 'js/beerbar_results.json',
-      'dataType': 'json',
-      'success': function(data, textStats, XMLHttpRequest) {
-        foodz.yelp_data_callback(data);
-      }
-    });
-  }
-  else
-  {
-    OAuth.setTimestampAndNonce(message);
-    OAuth.SignatureMethod.sign(message, this.auth.accessor_info);
-    parameterMap = OAuth.getParameterMap(message.parameters);
-    console.log(parameterMap);
+  //if( this.dev_mode === true ){ 
+  //  $.ajax({
+  //    'url': 'js/beerbar_results.json',
+  //    'dataType': 'json',
+  //    'success': function(data, textStats, XMLHttpRequest) {
+  //      foodz.yelp_data_callback(data);
+  //    }
+  //  });
+  //  return;
+  //}
+  OAuth.setTimestampAndNonce(message);
+  OAuth.SignatureMethod.sign(message, foodz.auth.accessor_info);
+  parameterMap = OAuth.getParameterMap(message.parameters);
 
-    $.ajax({
-      'url': message.action,
-      'data': parameterMap,
-      'dataType': 'jsonp',
-      'jsonpCallback': 'cb',
-      'success': function(data, textStats, XMLHttpRequest) {
-        foodz.yelp_data_callback(data);
-      }
-    });
-  }
+  $.ajax({
+    'url': message.action,
+    'data': parameterMap,
+    'dataType': 'jsonp',
+    'jsonpCallback': 'cb',
+    'success': function(data, textStats, XMLHttpRequest) {
+      foodz.yelp_data_callback(data);
+    }
+  });
 };
 
 foodz.find_by_term_and_location = function( search_terms, location_text )
@@ -259,26 +252,18 @@ foodz.yelp_find_by_id = function( id )
   foodz.find( 'id', id);
 };
 
-foodz.add_yelp_marker_to_map = function( yelp ){
+foodz.add_marker_to_map = function( yelp ){
   //convert yelp business to a google map marker
-  if( this.dev_mode === true )
-  { 
-    latt = yelp.latitude;
-    lngt = yelp.longitude;
-  }
-  else
-  {
-    latt = yelp.location.coordinate.latitude;
-    lngt = yelp.location.coordinate.longitude;
-  }
   marker = {
-    position: new google.maps.LatLng(latt, lngt),
+    position: new google.maps.LatLng(yelp.lat, yelp.long),
     title: yelp.id,
     map: foodz.map,
     animation: google.maps.Animation.DROP
   };
   //*TODO: pan and focus the map on each marker after dropping it
   foodz.yelp.markers[yelp.id] = new google.maps.Marker( marker );
+  google.maps.event.addListener( foodz.yelp.markers[yelp.id], 'click', foodz.handleMapItemClick);
+  foodz.map.setCenter( marker.position );
 };
 
 foodz.handleMapItemClick = function(e){
@@ -286,9 +271,6 @@ foodz.handleMapItemClick = function(e){
   //trigger 
   app = Sammy.apps['#main'];
   app.trigger('load-restaurant', { id: e.currentTarget.title } );
-
-  //foodz.toggleMarkerBounce( foodz.yelp.markers[ e.currentTarget.title ] );
-  //foodz.toggleMarkerBounce( foodz.yelp.markers[ e.currentTarget.title ] );
 };
 
 foodz.toggleMarkerBounce = function( marker ){
@@ -340,11 +322,11 @@ foodz.clear_markers = function( )
 
     // a BEFORE FILTER for routes    .. (just for routes, right?)
     this.before(function() {
-      if (!db_loaded) {
+      //if (!db_loaded) {
         //this.redirect('#/connecting');
         //return false;
           //if (!js_loaded) {
-      }
+      //}
     });
 
     // CONTROLLER ACTIONS
@@ -352,15 +334,14 @@ foodz.clear_markers = function( )
     // POST - write!
     this.post('#/favorite/:id/', function(context) {
       //must be logged in!
-      // TODO: if not logged in redirect to login page
-      //this.favorites.users[user_id].append(yelp_id);
-      //this.users.favorites[yelp_id].append(user_id);
+      //TODO: move this to a before filter
       if( foodz.user == false )
       {
         context.redirect('#/login/');
+        return;
       }
 
-      //FB.ui popup publish offer on fave()/save()?
+      // TODO: FB.ui popup publish offer on fave()/save()?
       context.log('mark a restaurant as a favorite');
 
       yelp_id = this.params['id'];
@@ -370,145 +351,152 @@ foodz.clear_markers = function( )
       this.db.openDoc(yelp_id, {
         success: function(response) {
           favorite = response;
-          if(!foodz.yelp.businesses[yelp_id]){
-            foodz.yelp.businesses[yelp_id] = favorite;
-          }
           //update record
-          favorite.users[user_id] = user_name; 
+          favorite.users[user_id]=user_name;
           foodz.app.db.saveDoc( favorite );
+          foodz.yelp.businesses[yelp_id] = favorite;
         },
         error: function(response) {
-          if(foodz.yelp.businesses[yelp_id]){
-            favorite = {
-              'yelp_id': yelp_id,
-              'type': "favorite",
-              'name': foodz.yelp.businesses[yelp_id]['name'], 
-              'rating': foodz.yelp.businesses[yelp_id]['rating_img_url'], 
-              'href': foodz.yelp.businesses[yelp_id]['url'],
-              'location': foodz.yelp.businesses[yelp_id]['city'],
-              'state': foodz.yelp.businesses[yelp_id]['state'],
-              'users': { user_id: user_name },
-              'lat' : foodz.yelp.businesses[yelp_id]['latitude'],
-              'long' : foodz.yelp.businesses[yelp_id]['longitude'], 
-            };
-            foodz.app.db.saveDoc( favorite );
-          }else{
-            //TODO: look this up via yelp
-            record = foodz.find('id', yelp_id);
-            favorite  = {
-              'yelp_id': yelp_id,
-              'type': "favorite",
-              'name': record.businesses[yelp_id]['name'], 
-              'rating': record.businesses[yelp_id]['rating_img_url'], 
-              'href': record.businesses[yelp_id]['url'],
-              'location': record.businesses[yelp_id]['city'] + ", " + record.businesses[yelp_id]['state'],
-              'users': { user_id: user_name }
-            };
-            if( this.dev_mode === true ) {
-              favorite['lat'] = record.businesses[yelp_id]['latitude']; 
-              favorite['long'] = record.businesses[yelp_id]['longitude']; 
-            } else {
-              favorite['lat'] = record.businesses[yelp_id]['location']['coordinate']['latitude'];
-              favorite['long'] = record.businesses[yelp_id]['location']['coordinate']['longitude']; 
-            }
-            foodz.app.db.saveDoc( favorite );
-          }
+          favorite = {
+            'yelp_id': yelp_id,
+            'type': "favorite",
+            'name': foodz.yelp.businesses[yelp_id]['name'], 
+            'rating': foodz.yelp.businesses[yelp_id]['rating_img_url'], 
+            'href': foodz.yelp.businesses[yelp_id]['url'],
+            'location': foodz.yelp.businesses[yelp_id]['location'],
+            'users': { user_id: user_name },
+            'lat' : foodz.yelp.businesses[yelp_id]['lat'],
+            'long' : foodz.yelp.businesses[yelp_id]['long'], 
+          };
+          foodz.app.db.saveDoc( favorite );
+          foodz.yelp.businesses[yelp_id] = favorite;
         }
       });
-      // fave_user and user_fave
+      
+      // store fave_user and user_fave
       this.db.openDoc( foodz.user.id, {
         success: function(response) {
           foodz.user = response;
           //update record
-          if( !foodz.user.favorites)
-          { foodz.user.favorites = {}; }
-          foodz.user.favorites[yelp_id] = favorite; 
+          if( !foodz.user.favorites ){ 
+            foodz.user.favorites = {}; 
+          }else{
+            foodz.user.favorites[yelp_id] = favorite; 
+          }
           foodz.app.db.saveDoc( foodz.user );
         }
       });
+      foodz.yelp.markers[ yelp_id ].setAnimation(google.maps.Animation.BOUNCE);
       this.redirect('#/restaurant/' + yelp_id + '/');
     }); 
 
+    // submit our search form:
     this.post('#/search/', function(context) {
-      foodz.find('term', 'Beer');
+      log(context);
+      log(this.params.search_term);
+      foodz.find_by_term_and_location(this.params.search_term, this.params.search_location);
       $('#main').dialog('close');
     });
 
     // read-only urls:
+    this.get('#/search/', function(context) {
+      $('#ui-dialog-title-main').html('Search');
+      new_html = '<div><form action="#/search/" method="post"><label width="40px;">';
+      new_html += 'Search Restaurants:</label><br/><input name="search_term" id="search_term" style="color:#CCC;" type="text"/><br/>';
+      new_html += '<label>Location:</label><br/>';
+      new_html += '<input name="search_location" id="search_location" placeholder="San Francisco, CA" style="color:#CCC;" type="text"/>';
+      new_html += '<br/><input value="Search" type="submit" /></div>';
+      $('#main').html(new_html);
+      $('#main').dialog('open');
+    });
+
+    //restaurant detail view:
     this.get('#/restaurant/:id/', function(context) {
       //get restaurant / favorite detail html by yelp_id
       id = this.params['id'];
       log('detail view of ' + foodz.yelp.businesses[id].name );
+      this.db.openDoc( id, {
+        success: function(response) {
+          this.restaurant = response;
+          foodz.yelp.businesses[id] = response;
+        },
+        error: function(response) {
+          this.restaurant = foodz.yelp.businesses[id];
+        }
+      });
+      this.restaurant['is_favorite'] = false;
+      this.restaurant.user_count = 0;
+      this.restaurant.favorites_html = '';
+      if(this.restaurant.users){
+        for(user in this.restaurant.users){
+          this.restaurant.user.favorites_html += '<p><a href="#/user/' + user +'/">' + this.restaurant.users[user] + '</a></p>';
+          this.restaurant.user_count = this.restaurant.user_count + 1;
+          if( foodz.user && foodz.user.id && foodz.user.id == user ){ 
+            this.restaurant['is_favorite'] = true; 
+          }
+        }
+      }
       $('#ui-dialog-title-main').html('Restaurant');
-      this.restaurant = foodz.yelp.businesses[id];
-      this.restaurant['favorite'] = false;
-      this.restaurant['user_count'] = 0;
       sometext = this.partial('templates/restaurant.html.erb');
       $('#main').dialog('open');
-
-      //print favorite_count
-      //FB.ui popup publish offer on fave()/save()?
-
-      //this.favorite = db.collection('favorites').get(this.params['id']).json();
-      //this.partial('/templates/task_details.html.erb')
-      //provide a link to '#/favorite/:id/users/' list view
-
     });
-    this.get('#/favorite/:id/users/', function(context) {
-      //ask the user to log in!!
-        //get user list html by yelp_id
-        //Logged-In only?  load login prompt?
-        alert('list view of users per restaurant' + id);
-        context.log('all users who consider this restaurant a favorite');
-    });
-    this.get('#/favorites/', function(context) {
-      if(foodz.dev_mode === true ){
-        foodz.find('term', 'Beer');
+
+    //user detail view
+    this.get('#/user/:id/', function(context) {
+      //only available to logged in users?  load login prompt?
+      this.id = this.params['id'];
+      context.log("user detail view: " + this.id);
+      if( foodz.user !== false && foodz.user.id == this.id){
+        this.user = foodz.user;
       }else{
-        //  TODO: visually cycle through the 20 most recent favorites
-        //  pan/zoom the map, fade in overlay info
-        foodz.find('term', 'Beer');
+        this.user = foodz.app.db.loadDoc(this.id); 
       }
-      $('#ui-dialog-title-main').html('Top Favorites');
-      new_html = '<div><p>add a text-based list here as well?</p></div>'; 
-      $('#main').html(new_html);
+      this.user.favorite_count = 0;
+      if(this.user.favorites){
+        this.user.favorites_html = '';
+        for (fave in this.user.favorites){
+          this.user.favorites_html += '<p><a href="#/restaurant/' + fave +'/">' + this.user.favorites[fave]['name'] + '</a></p>';
+          this.user.favorite_count += 1;
+        }
+      }
+      $('#ui-dialog-title-main').html('User Profile');
+      //context.render( 'templates/user.html.erb', user );
+      this.partial('templates/user.html.erb');
       $('#main').dialog('open');
     });
-    this.get('#/search/', function(context) {
-      $('#ui-dialog-title-main').html('Search');
-      new_html = '<div><form action="#/search/" method="post"> <label>Search:</label> <br/>';
-      new_html += '<input name="search_term" id="search_term" style="color:#CCC;" type="text"/><input value="Search" type="submit" /></div>'; 
-      $('#main').html(new_html);
-      $('#main').dialog('open');
-    });
-    this.get('#/settings/', function(context) {
-      // logout / disconnect
-      //<button style='display:none;' id="disconnect">Disconnect</button>
-      //<button style='display:none;' id="logout">Logout</button>
-      $('#main').dialog('open');
-      context.log('app settings');
-    });
+
+    //restaurant list view (group_by user):
     this.get('#/user/:id/favorites/', function(context) {
-      context.log('favorite list view, per user');
-      //get restaurant list html by facebook_id
-      //Logged-In only?  load login prompt?
-      alert('list view of favorites per user ' + id);
+      foodz.find('term', 'Beer');
+      //clear map markers
+      //get our list of restaurants
+      //load them and attach markers to the map
     });
 
-    this.get('#/menu/', function(context) {
-      $('#ui-dialog-title-main').html('MENU');
-      new_html = "<p><a href='#/search/'>search</a></p><p><a href='#/favorites/'>favorites</a></p>";
-      new_html += "<p><a href='#/users/'>users</a></p><p><a href='#/about/'>about</a></p>";
-      if( foodz.user !== false){ new_html += "<p><a href='#/user/"+foodz.user.id+"/'>my_profile</a></p>"; }
+    //restaurant list, view all or view recent / popular
+    this.get('#/favorites/', function(context) {
+      //  TODO: visually cycle through the 20 most recent favorites
+      //  pan/zoom the map, fade in overlay info
+      foodz.find('term', 'Beer');
+      $('#ui-dialog-title-main').html('Top Favorites');
+      new_html = '<div><p>Recent favorites have been added to the map.</p></div>'; 
       $('#main').html(new_html);
       $('#main').dialog('open');
-    }); 
+    });
 
+    //user list, view all or view recent / popular
     this.get('#/users/', function(context) {
+      //must be logged in!
+      //TODO: move this validation to a before filter
+      if( foodz.user == false )
+      {
+        context.redirect('#/login/');
+        return;
+      }
+
       $('#ui-dialog-title-main').html('Users');
       new_html = "<p>loading...</p>";
       $('#main').html(new_html);
-      //only available to logged in users?  load login prompt?
       //this.id = this.params['id'];
       //context.log("user detail view: " + this.id);
       //if( foodz.user !== false && foodz.user.id == this.id){
@@ -522,57 +510,57 @@ foodz.clear_markers = function( )
       $('#main').dialog('open');
     });
 
-    this.get('#/user/:id/', function(context) {
-      //only available to logged in users?  load login prompt?
-      this.id = this.params['id'];
-      context.log("user detail view: " + this.id);
-      if( foodz.user !== false && foodz.user.id == this.id){
-        this.user = foodz.user;
+    //options menu
+    this.get('#/menu/', function(context) {
+      $('#ui-dialog-title-main').html('MENU');
+      new_html = "<p><a href='#/search/'>Search</a></p><p><a href='#/favorites/'>Top Favorites</a></p>";
+      if( foodz.user !== false){ 
+        new_html += "<p><a href='#/user/"+foodz.user.id+"/'>My Profile</a></p>"; 
       }else{
-        this.user = foodz.app.db.loadDoc(this.id); 
+        new_html += "<p><a href='#/login/'>My Profile</a></p>";
       }
-      $('#ui-dialog-title-main').html(this.user.name);
-      //include favorite count if any
-      //context.render( 'templates/user.html.erb', user );
-      this.partial('templates/user.html.erb');
+      new_html += "<p><a href='#/users/'>Users</a></p><p><a href='#/about/'>About</a></p>";
+      $('#main').html(new_html);
       $('#main').dialog('open');
-    });
+    }); 
 
+    //login page
     this.get('#/login/', function(context) {
       //login?
       $('#ui-dialog-title-main').html('Would you like to login?');
-      new_html = "<p>Sorry. Some features of this site require an authorized account in order to work.  Please try logging in to enable more advanced features.</p><p><button id='login_button'>Login with Facebook</button></p>";
+      new_html = "<p>Sorry, some features of this site require account access.</p<p>Please try logging in to enable more advanced features.</p><br/><br/><p><button id='login_button'>Login with Facebook</button> &nbsp; &nbsp; or &nbsp; &nbsp; <button id='continue_button'>Continue anonymously</button></p>";
       $('#main').html(new_html);
-      //context.login_click_handler();
-      //log(context.login_click_handler());
-      //$('#login_button').bind('click', this.login_click_handler());
-      //this.login_click_handler('#login_button');
-      //log(this.login_click_handler());
-      //this.login_click_handler();
-      //login_click_handler('#login_button');
       $('#main').dialog('open');
-      $('#login_button').bind('click', this.login_click_handler );
+      $('#continue_button').bind('click', function() {
+        $('#main').dialog('close');
+      });
+      $('#login_button').bind('click', function() {
+        FB.login();
+      });
     });
 
+    //setting page
+    this.get('#/settings/', function(context) {
+      // logout / disconnect
+      //<button style='display:none;' id="disconnect">Disconnect</button>
+      //<button style='display:none;' id="logout">Logout</button>
+      $('#main').dialog('open');
+      context.log('app settings');
+    });
+
+    // About / Welcome page
     this.get('#/about/', function(context) {
       //welcome / about this app
-      $('#ui-dialog-title-main').html('About');
-      new_html = "<p>Welcome!  This couchdb demo app is currently under development.  you can find more info on <a href='https://github.com/ryanjarvinen/restaurant-adventure'>https://github.com/ryanjarvinen/restaurant-adventure</a>.</p>";
+      $('#ui-dialog-title-main').html('Welcome');
+      new_html = "<p>This couchdb demo app is currently under development.<br/>It should allow you to sign in via facebook and mark yelp restaurants / reviews as favorites. Users should also be able to see content that has been marked as a favorite by others.<br/><br/>You can find more info on github:<br/><a href='https://github.com/ryanjarvinen/restaurant-adventure'>https://github.com/ryanjarvinen/restaurant-adventure</a>.</p><br/><p>Just click the 'MENU' button to get started.</p>";
       $('#main').html(new_html);
       $('#main').dialog('open');
     });
 
+    //main map view
     this.get('#/', function(context) {
       if( $('#main').dialog('isOpen'))
       { $('#main').dialog('close');}
-      //default view:
-      //*TODO: attempt to auto locate the search (if possible)
-      //*HACK: for now, redirect to the favorites page, get straight to the action.
-      //this.redirect('#/favorites/');
-      //this.redirect('#/menu/');
-      //this.redirect('#/menu/');
-      //popup location search box
-      //this.redirect('#/search/');
     });
 
     this.bind('run', function() {
@@ -580,8 +568,8 @@ foodz.clear_markers = function( )
       // initialize our map
       foodz.draw_map();
       //initialize facebook api
-      app_id = '0501aae0be4cc61f8b2bc429c994b7a0'; // production:
-      if( foodz.dev_mode === true){ app_id = 'e0e601064838428368f05fe285c14e41'; } // development
+      //app_id = '0501aae0be4cc61f8b2bc429c994b7a0'; // production:
+      app_id = 'e0e601064838428368f05fe285c14e41'; // development
       this.fb_init(app_id);
 
       //load a handler to our database
@@ -592,16 +580,9 @@ foodz.clear_markers = function( )
       $('#menu_button').bind('click', function() {
         context.redirect('#/menu/');
       });
-      
-      //var xhr = this.db.request("GET", "/doc1", {
-      //  body: JSON.stringify({"foo":"bar"}),
-      //  headers: {"Content-Type": "application/json"}
-      //});
-      //var resp = JSON.parse(xhr.responseText);
-      //console.log(resp);
-      //context.log(resp);
     });
 
+    // EVENT TRIGGERS
     this.bind('load-restaurant', function( e, data) {
       this.redirect('#/restaurant/' + data.id + '/');
     });
@@ -612,7 +593,7 @@ foodz.clear_markers = function( )
   });
 
   $(function() {
-    app.run('#/');
+    app.run('#/about/');
   })
 
 })(jQuery);

@@ -1,7 +1,13 @@
 <div id="user_<%= user.id %>">
-  <h1><%= user.name %></h1>
   <img src='<%= user.pic %>'/>
-  <p>favorite count: 0</p>
-  <p><a href='#/user/<%= user.id %>/favorites/'>load favorites</a></p>
-  <p>List of favorites</p>
+  <h2><%= user.name %></h2>
+  <br/>
+  <h2>favorites (<%= user.favorite_count %>)</h2>
+  <% if(user.favorite_count > 0 ){ %>
+    <p><a href='#/user/<%= user.id %>/favorites/'>show on map</a></p>
+    <br/>
+    <h3>List of favorites:</h3>
+    <%= user.favorites_html %>
+    <br/>
+  <% } %>
 </div>

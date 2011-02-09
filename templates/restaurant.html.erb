@@ -1,8 +1,19 @@
 <div id="restaurant_<%= restaurant.id %>">
   <h1><%= restaurant.name %></h1>
+  <p><%= restaurant.location %></p>
   <a href='<%= restaurant.url %>'><img src='<%= restaurant.rating_img_url %>'/></a>
-  <p><%= restaurant.city + ', '+ restaurant.state %></p>
-  <p><form action='#/favorite/<%= restaurant.id %>/' method="post"><input type='submit' value='Save this restaurant as one of your favorites!'/></form></p>
-  <p>users who like this:<%= ' ' + restaurant.user_count %></p>
-  <p>user list</p>
+  <br/>
+  <br/>
+  <% if( restaurant.is_favorite === true ){ %>
+    <p><form action='#/favorite/<%= restaurant.id %>/' method="post"><input type='submit' value='Save as Favorite'/></form></p>
+  <% }else{ %>
+    <p>This is one of your favorites.  Thanks for contributing!</p>
+  <% } %>
+  <br/>
+  <p>Favorite count:<%= ' ' + restaurant.user_count %></p>
+  <% if( restaurant.user_count > 0 ){ %>
+    <br/>
+    <h3>Users who have marked this as a Favorite:</h3>
+    <%= restaurant.user_html %>
+  <% } %>
 </div>
