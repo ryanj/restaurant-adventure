@@ -11,13 +11,15 @@ var YelpLib = function(app) {
 var GoogleMapsLib = function(app) {
   this.helpers({
     draw_map: function( lat, long ){
-      this.latlng = new google.maps.LatLng( lat, long );
-      this.myMapOptions = {
+
+      foodz.latlng = new google.maps.LatLng(foodz.search_location_lat, foodz.search_location_long);
+      foodz.myMapOptions = {
         zoom: 14,
-        center: this.latlng,
+        center: foodz.latlng,
         mapTypeId: google.maps.MapTypeId.ROADMAP
       };
-      this.map = new google.maps.Map(document.getElementById("map_canvas"), this.myMapOptions);
+      foodz.map = new google.maps.Map(document.getElementById("map_canvas"), foodz.myMapOptions);
+      this.trigger('map-and-fb-loaded');
     }
   });
 };
@@ -36,7 +38,9 @@ var FBConnect = function(app) {
         FB.logout();
       });
       FB.Event.subscribe('auth.sessionChange', this.handleSessionResponse );
+      FB.Event.subscribe('auth.login', function(){ $('#main').dialog('close');} );
       FB.getLoginStatus(this.handleSessionResponse);
+      this.trigger('map-and-fb-loaded');
     },
 
     // handle a session response from any of the auth related calls
@@ -120,27 +124,31 @@ foodz.yelp = {};
 foodz.yelp.businesses = {};
 foodz.yelp.markers = {};
 
-foodz.draw_map = function(){
-  foodz.latlng = new google.maps.LatLng(foodz.search_location_lat, foodz.search_location_long);
-  foodz.myMapOptions = {
-    zoom: 14,
-    center: foodz.latlng,
-    mapTypeId: google.maps.MapTypeId.ROADMAP
-  };
-  foodz.map = new google.maps.Map(document.getElementById("map_canvas"), foodz.myMapOptions);
-};
-
 foodz.yelp_data_callback = function(data){ 
   console.log(data);
-  foodz.search_results = data;
-  for( i=0; i < data.businesses.length ; i++)
-  {
-    foodz.yelp.businesses[data.businesses[i].id] = data.businesses[i];
-    foodz.yelp.businesses[data.businesses[i].id]['_id'] = data.businesses[i].id;
-    foodz.yelp.businesses[data.businesses[i].id]['lat'] = data.businesses[i]['location']['coordinate']['latitude'];
-    foodz.yelp.businesses[data.businesses[i].id]['long'] = data.businesses[i]['location']['coordinate']['longitude'];
-    foodz.yelp.businesses[data.businesses[i].id]['location'] = data.businesses[i]['location']['city'] + ', ' + data.businesses[i]['location']['state_code'];
-    foodz.add_marker_to_map(foodz.yelp.businesses[data.businesses[i].id]);
+  if(!data.businesses){
+    // this is a single result, not a list
+    foodz.yelp.businesses[data.id] = data;
+    if(!data.type == 'favorite'){
+      foodz.yelp.businesses[data.id]['_id'] = data.id;
+      foodz.yelp.businesses[data.id]['type'] = "favorite";
+      foodz.yelp.businesses[data.id]['lat'] = data['location']['coordinate']['latitude'];
+      foodz.yelp.businesses[data.id]['long'] = data['location']['coordinate']['longitude'];
+      foodz.yelp.businesses[data.id]['location'] = data['location']['city'] + ', ' + data['location']['state_code'];
+    }
+    foodz.add_marker_to_map(foodz.yelp.businesses[data.id]);
+  }else{
+    foodz.search_results = data;
+    for( i=0; i < data.businesses.length ; i++)
+    {
+      foodz.yelp.businesses[data.businesses[i].id] = data.businesses[i];
+      foodz.yelp.businesses[data.businesses[i].id]['type'] = "favorite";
+      foodz.yelp.businesses[data.businesses[i].id]['_id'] = data.businesses[i]['id'];
+      foodz.yelp.businesses[data.businesses[i].id]['lat'] = data.businesses[i]['location']['coordinate']['latitude'];
+      foodz.yelp.businesses[data.businesses[i].id]['long'] = data.businesses[i]['location']['coordinate']['longitude'];
+      foodz.yelp.businesses[data.businesses[i].id]['location'] = data.businesses[i]['location']['city'] + ', ' + data.businesses[i]['location']['state_code'];
+      foodz.add_marker_to_map(foodz.yelp.businesses[data.businesses[i].id]);
+    }
   }
 };
 
@@ -151,8 +159,8 @@ foodz.hide_user = function(){
 };
 
 foodz.display_user = function(){ 
-  $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + this.user.id + '/"><img style="width:76px;" src="' + this.user.pic + '">' + this.user.name + '</a>' ) .show('fast');
   $('#login').hide('fast');
+  $('#user-info').html('<a style="text-decoration:none;" href="#/user/' + this.user.id + '/"><img style="width:76px;" src="' + this.user.pic + '">' + this.user.name + '</a>' ) .show('fast');
   $('#logout').hide('fast');
   $('#user-info').show('fast');
 };
@@ -260,10 +268,14 @@ foodz.add_marker_to_map = function( yelp ){
     map: foodz.map,
     animation: google.maps.Animation.DROP
   };
-  //*TODO: pan and focus the map on each marker after dropping it
+
+  if( foodz.user && foodz.user.favorites && foodz.user.favorites[ yelp.id ] )
+  {
+    marker.animation = google.maps.Animation.BOUNCE;
+  }
   foodz.yelp.markers[yelp.id] = new google.maps.Marker( marker );
-  google.maps.event.addListener( foodz.yelp.markers[yelp.id], 'click', foodz.handleMapItemClick);
   foodz.map.setCenter( marker.position );
+  google.maps.event.addListener( foodz.yelp.markers[yelp.id], 'click', foodz.handleMapItemClick);
 };
 
 foodz.handleMapItemClick = function(e){
@@ -316,7 +328,7 @@ foodz.clear_markers = function( )
     this.use('Template', 'erb');
     this.use('Couch');
     //this.use(YelpLib);
-    //this.use(GoogleMapsLib);
+    this.use(GoogleMapsLib);
     this.use(FBConnect);
     //this.use('NestedParams');
 
@@ -352,22 +364,23 @@ foodz.clear_markers = function( )
         success: function(response) {
           favorite = response;
           //update record
-          favorite.users[user_id]=user_name;
+          favorite.users[ foodz.user.id ] = foodz.user.name;
           foodz.app.db.saveDoc( favorite );
           foodz.yelp.businesses[yelp_id] = favorite;
         },
         error: function(response) {
           favorite = {
-            'yelp_id': yelp_id,
+            '_id': yelp_id,
             'type': "favorite",
             'name': foodz.yelp.businesses[yelp_id]['name'], 
-            'rating': foodz.yelp.businesses[yelp_id]['rating_img_url'], 
-            'href': foodz.yelp.businesses[yelp_id]['url'],
+            'rating_img_url': foodz.yelp.businesses[yelp_id]['rating_img_url'], 
+            'url': foodz.yelp.businesses[yelp_id]['url'],
             'location': foodz.yelp.businesses[yelp_id]['location'],
-            'users': { user_id: user_name },
             'lat' : foodz.yelp.businesses[yelp_id]['lat'],
             'long' : foodz.yelp.businesses[yelp_id]['long'], 
           };
+          favorite.users = {};
+          favorite.users[foodz.user.id] = foodz.user.name;
           foodz.app.db.saveDoc( favorite );
           foodz.yelp.businesses[yelp_id] = favorite;
         }
@@ -380,14 +393,14 @@ foodz.clear_markers = function( )
           //update record
           if( !foodz.user.favorites ){ 
             foodz.user.favorites = {}; 
-          }else{
-            foodz.user.favorites[yelp_id] = favorite; 
           }
+          foodz.user.favorites[yelp_id] = favorite; 
           foodz.app.db.saveDoc( foodz.user );
         }
       });
       foodz.yelp.markers[ yelp_id ].setAnimation(google.maps.Animation.BOUNCE);
-      this.redirect('#/restaurant/' + yelp_id + '/');
+      foodz.map.setCenter( foodz.yelp.markers[ yelp_id ]['position'] );
+      this.redirect('#/');
     }); 
 
     // submit our search form:
@@ -414,22 +427,24 @@ foodz.clear_markers = function( )
     this.get('#/restaurant/:id/', function(context) {
       //get restaurant / favorite detail html by yelp_id
       id = this.params['id'];
-      log('detail view of ' + foodz.yelp.businesses[id].name );
+      this.restaurant = false;
       this.db.openDoc( id, {
         success: function(response) {
-          this.restaurant = response;
           foodz.yelp.businesses[id] = response;
         },
         error: function(response) {
+          if(!foodz.yelp.businesses[id]){ foodz.find('id', id); }
           this.restaurant = foodz.yelp.businesses[id];
         }
       });
+      this.restaurant = foodz.yelp.businesses[id];
+      log('detail view of ' + foodz.yelp.businesses[id].name );
       this.restaurant['is_favorite'] = false;
       this.restaurant.user_count = 0;
-      this.restaurant.favorites_html = '';
+      this.restaurant.users_html = '';
       if(this.restaurant.users){
         for(user in this.restaurant.users){
-          this.restaurant.user.favorites_html += '<p><a href="#/user/' + user +'/">' + this.restaurant.users[user] + '</a></p>';
+          this.restaurant.users_html += '<p><a href="#/user/' + user +'/">' + this.restaurant.users[user] + '</a></p>';
           this.restaurant.user_count = this.restaurant.user_count + 1;
           if( foodz.user && foodz.user.id && foodz.user.id == user ){ 
             this.restaurant['is_favorite'] = true; 
@@ -467,19 +482,38 @@ foodz.clear_markers = function( )
 
     //restaurant list view (group_by user):
     this.get('#/user/:id/favorites/', function(context) {
-      foodz.find('term', 'Beer');
       //clear map markers
+      foodz.clear_markers();
       //get our list of restaurants
-      //load them and attach markers to the map
+      this.db.openDoc(this.params['id'], {
+        success: function(user){
+          if( user.favorites ) {
+            for( fave in user.favorites){
+              //load them and attach markers to the map
+              foodz.app.db.openDoc(fave, {success: foodz.yelp_data_callback});
+            }
+          }
+        }
+      });
     });
 
     //restaurant list, view all or view recent / popular
     this.get('#/favorites/', function(context) {
       //  TODO: visually cycle through the 20 most recent favorites
       //  pan/zoom the map, fade in overlay info
-      foodz.find('term', 'Beer');
+      this.db.allDocs({
+        success: function(docs){
+          for( i=0; i < docs.total_rows ; i++ ){
+            foodz.app.db.openDoc( docs.rows[i].key, {
+              success: function(doc){
+                if(doc.type == 'favorite'){ foodz.yelp_data_callback(doc); }
+              }
+            });
+          }
+        }
+      });
       $('#ui-dialog-title-main').html('Top Favorites');
-      new_html = '<div><p>Recent favorites have been added to the map.</p></div>'; 
+      new_html = '<div><p>Recent favorites are being added to the map.</p></div>'; 
       $('#main').html(new_html);
       $('#main').dialog('open');
     });
@@ -493,20 +527,21 @@ foodz.clear_markers = function( )
         context.redirect('#/login/');
         return;
       }
-
       $('#ui-dialog-title-main').html('Users');
-      new_html = "<p>loading...</p>";
-      $('#main').html(new_html);
-      //this.id = this.params['id'];
-      //context.log("user detail view: " + this.id);
-      //if( foodz.user !== false && foodz.user.id == this.id){
-      //  this.user = foodz.user;
-      //}else{
-      //  this.user = foodz.app.db.loadDoc(this.id); 
-      //}
-      //include favorite count if any
-      //context.render( 'templates/user.html.erb', user );
-      //this.partial('templates/user.html.erb');
+      $('#main').html('');
+      this.db.allDocs({
+        success: function(docs){
+          for( i=0; i < docs.total_rows ; i++ ){
+            foodz.app.db.openDoc( docs.rows[i].key, {
+              success: function(doc){
+                if(doc.type == 'user'){
+                  $('#main').append("<p><a href='#/user/" + doc.id + "/'>" + doc.name +"</a></p>");
+                }
+              }
+            }); 
+          }
+        }
+      });
       $('#main').dialog('open');
     });
 
@@ -566,10 +601,10 @@ foodz.clear_markers = function( )
     this.bind('run', function() {
       var context = this;
       // initialize our map
-      foodz.draw_map();
+      this.draw_map();
       //initialize facebook api
-      //app_id = '0501aae0be4cc61f8b2bc429c994b7a0'; // production:
-      app_id = 'e0e601064838428368f05fe285c14e41'; // development
+      app_id = '0501aae0be4cc61f8b2bc429c994b7a0'; // production:
+      //app_id = 'e0e601064838428368f05fe285c14e41'; // development
       this.fb_init(app_id);
 
       //load a handler to our database
@@ -586,6 +621,16 @@ foodz.clear_markers = function( )
     this.bind('load-restaurant', function( e, data) {
       this.redirect('#/restaurant/' + data.id + '/');
     });
+
+    //this.bind('map-and-fb-loaded', function( e, data) {
+    //  if( foodz.user && foodz.map ){
+    //    if(foodz.user.favorites) {
+    //      for( fave in foodz.user.favorites){
+    //        foodz.app.db.openDoc(fave).then(function(data){foodz.yelp_data_callback(data);});
+    //      }
+    //    }
+    //  }
+    //});
 
     //this.bind('error', function(e, data) {
     //  $('#error').text(data.message).show();

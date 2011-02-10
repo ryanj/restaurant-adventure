@@ -5,15 +5,15 @@
   <br/>
   <br/>
   <% if( restaurant.is_favorite === true ){ %>
-    <p><form action='#/favorite/<%= restaurant.id %>/' method="post"><input type='submit' value='Save as Favorite'/></form></p>
-  <% }else{ %>
     <p>This is one of your favorites.  Thanks for contributing!</p>
+  <% }else{ %>
+    <p><form action='#/favorite/<%= restaurant.id %>/' method="post"><input type='submit' value='Save as Favorite'/></form></p>
   <% } %>
   <br/>
   <p>Favorite count:<%= ' ' + restaurant.user_count %></p>
   <% if( restaurant.user_count > 0 ){ %>
     <br/>
     <h3>Users who have marked this as a Favorite:</h3>
-    <%= restaurant.user_html %>
+    <%= restaurant.users_html %>
   <% } %>
 </div>

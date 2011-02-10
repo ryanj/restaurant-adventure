@@ -12,13 +12,11 @@ function(newDoc, oldDoc, userCtx) {
     }
     
     if (newDoc.type == 'favorite') {
-        //require('user_id');
-        require('yelp_id');
         require('name');
         require('lat');
         require('long');
-        require('rating');
-        require('href');
+        require('rating_img_url');
+        require('url');
         //users
     }
 }
