@@ -100,7 +100,7 @@ var FBConnect = function(app) {
 
 var foodz = {
   //Search defaults:
-  search_location_text: "Oakland, CA",
+  search_location_text: "San Francisco, CA",
   search_location_lat: "37.804444",
   search_location_long: "-122.270833",
   search_terms: 'beer',
@@ -231,7 +231,7 @@ foodz.find = function( mode, params )
 
 foodz.find_by_term_and_location = function( search_terms, location_text )
 {
-  this.search_location_text = location_text;
+  if( location_text != '' ){ this.search_location_text = location_text;};
   this.find_by_term( search_terms );
 };
 
@@ -417,7 +417,7 @@ foodz.clear_markers = function( )
       new_html = '<div><form action="#/search/" method="post"><label width="40px;">';
       new_html += 'Search Restaurants:</label><br/><input name="search_term" id="search_term" style="color:#CCC;" type="text"/><br/>';
       new_html += '<label>Location:</label><br/>';
-      new_html += '<input name="search_location" id="search_location" placeholder="San Francisco, CA" style="color:#CCC;" type="text"/>';
+      new_html += '<input name="search_location" id="search_location" placeholder="' + foodz.search_location_text + '" style="color:#CCC;" type="text"/>';
       new_html += '<br/><input value="Search" type="submit" /></div>';
       $('#main').html(new_html);
       $('#main').dialog('open');
